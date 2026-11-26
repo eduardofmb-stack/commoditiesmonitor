@@ -1,0 +1,23 @@
+{
+ "rodou_em_utc": "2026-11-26T19:14:34",
+ "fontes": {
+  "futuros": {
+   "linhas": 3765,
+   "falhas": [
+    "ZSX26.CBT: HTTP Error 404: Not Found"
+   ]
+  },
+  "continuo": {
+   "linhas": 7542,
+   "falhas": []
+  },
+  "ptax": {
+   "linhas": 2509,
+   "falhas": []
+  },
+  "cftc": {
+   "linhas": 780,
+   "falhas": []
+  }
+ }
+}
