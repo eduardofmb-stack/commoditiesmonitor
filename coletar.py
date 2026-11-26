@@ -108,7 +108,67 @@ def cftc():
     gravar("cftc.csv", ["data", "produto", "fundos_comprado", "fundos_vendido", "fundos_liquido"], sorted(linhas))
     return len(linhas), falhas
 
+
+# ---------- arquivos prontos para o painel ----------
+BOLSA = {"Soja": ("CBOT", "US¢/bu", 10), "Milho": ("CBOT", "US¢/bu", 10), "Algodão": ("ICE", "US¢/lb", 30)}
+ATIVOS = {"Soja": ["Jan", "Mar", "Mai", "Jul", "Nov"], "Milho": ["Mar", "Mai", "Jul", "Dez"], "Algodão": ["Mar", "Mai", "Jul", "Dez"]}
+MESNUM = {m: i + 1 for i, m in enumerate(["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"])}
+
+def _ler(nome):
+    with open(os.path.join(OUT, nome), encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+def _venc(contrato):
+    m, a = contrato.split("/")
+    return (2000 + int(a), MESNUM[m])
+
+def _chave(*partes):
+    t = "_".join(partes).lower()
+    for a, b in zip("áàâãéêíóôõúç", "aaaaeeiooouc"):
+        t = t.replace(a, b)
+    return "".join(ch if ch.isalnum() else "_" for ch in t)
+
+def montar():
+    """Gera, a partir dos CSVs, os JSON no formato do painel."""
+    fut = _ler("futuros.csv")
+    por = {}
+    for r in fut:
+        por.setdefault((r["produto"], r["data"]), []).append(r)
+    anterior = {}
+    recente, hist = [], []
+    datas = sorted({r["data"] for r in fut})
+    ultimas = set(datas[-20:])
+    for (produto, data) in sorted(por, key=lambda k: (k[1], k[0])):
+        bolsa, unidade, folga = BOLSA[produto]
+        linhas = sorted(por[(produto, data)], key=lambda r: _venc(r["contrato"]))
+        d = dt.date.fromisoformat(data) + dt.timedelta(days=folga)
+        principal = next((r["contrato"] for r in linhas
+                          if r["contrato"].split("/")[0] in ATIVOS[produto] and _venc(r["contrato"]) > (d.year, d.month)), None)
+        for n, r in enumerate(linhas):
+            c = float(r["fechamento"])
+            hist.append({"data": data, "produto": produto, "contrato": r["contrato"], "fechamento": c})
+            ant = anterior.get((produto, r["contrato"]))
+            anterior[(produto, r["contrato"])] = c
+            if data in ultimas:
+                recente.append({"chave": _chave(data, produto, r["contrato"]), "principal": 1 if r["contrato"] == principal else 0,
+                                "data": data, "produto": produto, "bolsa": bolsa, "contrato": r["contrato"], "ordem": n + 1,
+                                "fechamento": c, "unidade": unidade, "var_dia": None if ant is None else round(c - ant, 4),
+                                "fonte": "Yahoo Finance (ajuste %s), coleta automática" % bolsa})
+    corte = (HOJE - dt.timedelta(days=5 * 365)).isoformat()
+    cont = [{"data": r["data"], "produto": r["produto"], "fechamento": float(r["fechamento"])} for r in _ler("continuo.csv") if r["data"] >= corte]
+    cont += [{"data": r["data"], "produto": "Dólar PTAX", "fechamento": float(r["ptax_venda"])} for r in _ler("dolar_ptax.csv") if r["data"] >= corte]
+    fundos = [{"chave": _chave(r["data"], r["produto"]), "data": r["data"], "produto": r["produto"], "comprado": int(r["fundos_comprado"]),
+               "vendido": int(r["fundos_vendido"]), "liquido": int(r["fundos_liquido"])} for r in _ler("cftc.csv")]
+    for nome, dados in [("painel_futuros_recente.json", recente), ("painel_historico_futuros.json", hist),
+                        ("painel_historico_continuo.json", cont), ("painel_cftc.json", fundos)]:
+        json.dump(dados, open(os.path.join(OUT, nome), "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+    return {"futuros_recente": len(recente), "historico_futuros": len(hist), "historico_continuo": len(cont), "cftc": len(fundos)}
+
 if __name__ == "__main__":
+    import sys
+    if "--so-montar" in sys.argv:
+        print(montar())
+        sys.exit(0)
     status = {"rodou_em_utc": dt.datetime.utcnow().isoformat(timespec="seconds"), "fontes": {}}
     for nome, fn in [("futuros", futuros), ("continuo", continuo), ("ptax", ptax), ("cftc", cftc)]:
         try:
@@ -116,6 +176,10 @@ if __name__ == "__main__":
             status["fontes"][nome] = {"linhas": n, "falhas": falhas}
         except Exception as e:
             status["fontes"][nome] = {"linhas": 0, "falhas": [str(e)]}
+    try:
+        status["painel"] = montar()
+    except Exception as e:
+        status["painel"] = {"falha": str(e)}
     os.makedirs(OUT, exist_ok=True)
     json.dump(status, open(os.path.join(OUT, "status.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print(json.dumps(status, ensure_ascii=False, indent=1))
