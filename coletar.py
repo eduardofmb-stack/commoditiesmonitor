@@ -3,8 +3,11 @@
 Grava CSVs em data/ e um data/status.json dizendo o que funcionou.
 Cada fonte roda isolada: a falha de uma não derruba as outras.
 Fontes: Yahoo Finance (futuros CBOT e ICE por contrato e série contínua),
-Banco Central (PTAX venda, série SGS 1) e CFTC (posição dos fundos)."""
-import csv, datetime as dt, json, os, time, urllib.parse, urllib.request
+Banco Central (PTAX venda, série SGS 1), CFTC (posição dos fundos),
+B3 (arquivo oficial de negócios consolidados: ajustes do boi gordo e do milho),
+Cepea (widget oficial de indicadores), Sistema Faep (prêmios de Paranaguá e
+dólar comercial, dados da CMA e da Econf) e AgRural (praças de soja e milho)."""
+import csv, datetime as dt, html, json, os, re, time, urllib.parse, urllib.request
 
 HOJE = dt.date.today()
 OUT = "data"
@@ -164,13 +167,219 @@ def montar():
         json.dump(dados, open(os.path.join(OUT, nome), "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     return {"futuros_recente": len(recente), "historico_futuros": len(hist), "historico_continuo": len(cont), "cftc": len(fundos)}
 
+
+# ---------- fontes brasileiras ----------
+BRT = dt.timezone(dt.timedelta(hours=-3))
+HOJE_BR = dt.datetime.now(BRT).date()
+MESPT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+
+def baixar_bytes(url, espera=120):
+    req = urllib.request.Request(url, headers=UA)
+    with urllib.request.urlopen(req, timeout=espera) as r:
+        return r.read()
+
+def _num(t):
+    t = t.replace("R$", "").replace("%", "").strip()
+    if not t or t in "-–":
+        return None
+    return float(t.replace(".", "").replace(",", "."))
+
+def _texto(h):
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", re.sub(r"<!--.*?-->", " ", h, flags=re.S)))).strip()
+
+def _tabelas(pagina):
+    """Lista de (posição, linhas); cada linha é a lista de textos das células."""
+    saida = []
+    pagina = re.sub(r"<!--.*?-->", lambda m: " " * len(m.group(0)), pagina, flags=re.S)
+    for m in re.finditer(r"<table.*?</table>", pagina, flags=re.S | re.I):
+        linhas = []
+        for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", m.group(0), flags=re.S | re.I):
+            cel = [_texto(c) for c in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", tr, flags=re.S | re.I)]
+            if cel:
+                linhas.append(cel)
+        saida.append((m.start(), linhas))
+    return saida
+
+def _acumular(nome, cabecalho, novas, nchave):
+    """Junta as linhas novas ao CSV existente; a chave são as nchave primeiras colunas."""
+    atual = {}
+    caminho = os.path.join(OUT, nome)
+    if os.path.exists(caminho):
+        with open(caminho, encoding="utf-8") as f:
+            leitor = csv.reader(f)
+            if next(leitor, None) == cabecalho:
+                for r in leitor:
+                    atual[tuple(r[:nchave])] = r
+    for r in novas:
+        r = ["" if v is None else str(v) for v in r]
+        atual[tuple(r[:nchave])] = r
+    gravar(nome, cabecalho, [atual[k] for k in sorted(atual)])
+    return len(atual)
+
+def _data_ddmm(t):
+    """'25/11' -> data mais recente com esse dia e mês que não esteja no futuro."""
+    d, m = [int(x) for x in t.split("/")[:2]]
+    data = dt.date(HOJE_BR.year, m, d)
+    if data > HOJE_BR + dt.timedelta(days=2):
+        data = dt.date(HOJE_BR.year - 1, m, d)
+    return data
+
+B3_PROD = {"BGI": "Boi gordo", "CCM": "Milho B3"}
+
+def b3():
+    """Ajustes do boi gordo e do milho no arquivo oficial de negócios consolidados da B3."""
+    cab = ["data", "produto", "contrato", "simbolo", "ajuste", "ultimo", "variacao_pct", "negocios"]
+    caminho = os.path.join(OUT, "b3_agro.csv")
+    tem = set()
+    if os.path.exists(caminho):
+        tem = {r["data"] for r in _ler("b3_agro.csv")}
+    dias = 40 if len(tem) < 20 else 8
+    novas, falhas = [], []
+    for k in range(dias, 0, -1):
+        d = HOJE_BR - dt.timedelta(days=k)
+        if d.weekday() >= 5 or (d.isoformat() in tem and k > 3):
+            continue
+        try:
+            j = json.loads(baixar_bytes("https://arquivos.b3.com.br/api/download/requestname?fileName="
+                                        "TradeInformationConsolidatedFile&date=%s&recaptchaToken=" % d.isoformat()))
+            bruto = baixar_bytes("https://arquivos.b3.com.br/api/download/?token=" + j["token"], 300).decode("latin-1")
+        except Exception as e:  # feriado ou arquivo ainda não publicado
+            if k <= 3:
+                falhas.append("%s: %s" % (d, e))
+            continue
+        linhas = bruto.splitlines()
+        ini = next((i for i, l in enumerate(linhas) if l.startswith("RptDt;")), None)
+        if ini is None:
+            falhas.append("%s: cabeçalho não encontrado" % d)
+            continue
+        for r in csv.DictReader(linhas[ini:], delimiter=";"):
+            s = r.get("TckrSymb") or ""
+            if len(s) == 6 and s[:3] in B3_PROD and s[3] in MES and s[4:].isdigit() and r.get("SgmtNm") == "AGRIBUSINESS":
+                aj = _num(r.get("AdjstdQt") or "")
+                if aj is None:
+                    continue
+                novas.append([r["RptDt"], B3_PROD[s[:3]], "%s/%s" % (MES[s[3]], s[4:]), s, aj,
+                              _num(r.get("LastPric") or ""), _num(r.get("OscnPctg") or ""), _num(r.get("TradQty") or "")])
+        time.sleep(1)
+    n = _acumular("b3_agro.csv", cab, novas, 4)
+    return n, falhas
+
+CEPEA_IDS = [2, 77, 12, 92, 54]  # boi gordo, milho, soja Paraná, soja Paranaguá, algodão
+CEPEA_SERIES = [("paranagu", "soja_paranagua"), ("soja", "soja_parana"), ("milho", "milho_cepea"),
+                ("algod", "algodao_cepea"), ("boi", "boi_cepea")]
+
+def cepea():
+    """Indicadores do Cepea pelo widget que o próprio Cepea oferece para sites de terceiros."""
+    q = "fonte=arial&tamanho=10&largura=400px&corfundo=dbd6b2&cortexto=333333&corlinha=ede7bf"
+    q += "".join("&id_indicador%5B%5D=" + str(i) for i in CEPEA_IDS)
+    bruto = baixar_bytes("https://www.cepea.org.br/br/widgetproduto.js.php?" + q).decode("utf-8", "replace")
+    bruto = bruto.replace("\\/", "/").replace('\\"', '"')
+    novas, vistos = [], []
+    for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", bruto, flags=re.S | re.I):
+        cel = [_texto(c) for c in re.findall(r"<td[^>]*>(.*?)</td>", tr, flags=re.S | re.I)]
+        if len(cel) < 3 or not re.fullmatch(r"\d{2}/\d{2}/\d{4}", cel[0]):
+            continue
+        nome = cel[1].lower()
+        serie = next((s for k, s in CEPEA_SERIES if k in nome), None)
+        valor = _num(cel[2])
+        vistos.append(cel[1])
+        if serie and valor is not None:
+            novas.append([dt.datetime.strptime(cel[0], "%d/%m/%Y").date().isoformat(), serie, valor, cel[1]])
+    falhas = []
+    faltam = sorted({s for _, s in CEPEA_SERIES} - {r[1] for r in novas})
+    if faltam:
+        falhas.append("séries não encontradas: %s; nomes vistos: %s; início da resposta: %s"
+                      % (", ".join(faltam), vistos, _texto(bruto)[:200]))
+    n = _acumular("cepea.csv", ["data", "serie", "valor", "nome_cepea"], novas, 2)
+    return n, falhas
+
+def faep():
+    """Prêmios da soja em Paranaguá (CMA) e dólar comercial (Econf), na página de cotações do Sistema Faep."""
+    pagina = baixar_bytes("https://www.sistemafaep.org.br/cotacoes/").decode("utf-8", "replace")
+    premios, cambio, falhas = [], [], []
+    for pos, linhas in _tabelas(pagina):
+        titulo = _texto(pagina[max(0, pos - 900):pos]).lower()
+        cab = linhas[0]
+        datas = [(i, _data_ddmm(c)) for i, c in enumerate(cab) if re.fullmatch(r"\d{2}/\d{2}", c)]
+        datas = [(i, d) for i, d in datas if d < HOJE_BR]  # a coluna de hoje é parcial
+        if not datas:
+            continue
+        for r in linhas[1:]:
+            nome = r[0]
+            for i, d in datas:
+                v = _num(r[i]) if i < len(r) else None
+                if v is None:
+                    continue
+                if "prêmio soja paranagu" in titulo[-160:]:
+                    m = re.fullmatch(r"([A-Za-z]{3})\. ?(\d{2})", nome.strip())
+                    if m and m.group(1).lower() in MESPT:
+                        premios.append([d.isoformat(), "%s/%s" % (m.group(1).capitalize(), m.group(2)), round(v / 100, 4)])
+                elif nome.lower().startswith("dolar comercial - venda"):
+                    cambio.append([d.isoformat(), v])
+    if not premios:
+        falhas.append("tabela de prêmios não encontrada")
+    if not cambio:
+        falhas.append("dólar comercial não encontrado")
+    n = _acumular("premios_paranagua.csv", ["data", "embarque", "premio_usd_bu"], premios, 2)
+    n += _acumular("dolar_comercial.csv", ["data", "dolar_comercial_venda"], cambio, 1)
+    return n, falhas
+
+def agrural():
+    """Retrato das praças de soja e milho (preço de compra, R$/sc) da AgRural."""
+    pagina = baixar_bytes("https://agrural.com.br/precossojaemilho/").decode("utf-8", "replace")
+    linhas_out, falhas = [], []
+    for _, linhas in _tabelas(pagina):
+        if len(linhas) < 3 or linhas[0][0].strip().upper() not in ("SOJA", "MILHO"):
+            continue
+        produto = linhas[0][0].strip().capitalize()
+        m = re.fullmatch(r"(\d{1,2})-([A-Za-z]{3})-(\d{2})", linhas[0][-1].strip())
+        meses = {"jan": 1, "feb": 2, "fev": 2, "mar": 3, "apr": 4, "abr": 4, "may": 5, "mai": 5, "jun": 6, "jul": 7,
+                 "aug": 8, "ago": 8, "sep": 9, "set": 9, "oct": 10, "out": 10, "nov": 11, "dec": 12, "dez": 12}
+        if not m or m.group(2).lower() not in meses:
+            falhas.append("%s: data não reconhecida (%s)" % (produto, linhas[0][-1]))
+            continue
+        data = dt.date(2000 + int(m.group(3)), meses[m.group(2).lower()], int(m.group(1))).isoformat()
+        uf = ""
+        for r in linhas[2:]:
+            if len(r) >= 6 and len(r[0]) == 2:
+                uf, r = r[0], r[1:]
+            if len(r) >= 2 and _num(r[1]) is not None:
+                linhas_out.append([data, produto, uf, r[0], _num(r[1])])
+    if not linhas_out:
+        falhas.append("tabelas não encontradas")
+    else:
+        gravar("pracas_agrural.csv", ["data", "produto", "uf", "praca", "preco_rs_sc"], linhas_out)
+    return len(linhas_out), falhas
+
+def montar_boi():
+    """Boi gordo B3 no formato de precos_futuros: últimos 20 pregões, quatro primeiros vencimentos."""
+    linhas = [r for r in _ler("b3_agro.csv") if r["produto"] == "Boi gordo"]
+    datas = sorted({r["data"] for r in linhas})
+    anterior, saida = {}, []
+    for data in datas:
+        dia = sorted([r for r in linhas if r["data"] == data], key=lambda r: _venc(r["contrato"]))
+        d = dt.date.fromisoformat(data)
+        principal = next((r["contrato"] for r in dia if _venc(r["contrato"]) > (d.year, d.month)), None)
+        for n, r in enumerate(dia):
+            c = float(r["ajuste"])
+            ant = anterior.get(r["contrato"])
+            anterior[r["contrato"]] = c
+            if data in datas[-20:] and n < 4:
+                saida.append({"chave": _chave(data, "boi gordo", r["contrato"]), "principal": 1 if r["contrato"] == principal else 0,
+                              "data": data, "produto": "Boi gordo", "bolsa": "B3", "contrato": r["contrato"], "ordem": n + 1,
+                              "fechamento": c, "unidade": "R$/@", "var_dia": None if ant is None else round(c - ant, 2),
+                              "fonte": "B3 (preço de ajuste, arquivo de negócios consolidados), coleta automática"})
+    json.dump(saida, open(os.path.join(OUT, "painel_boi_recente.json"), "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+    return len(saida)
+
 if __name__ == "__main__":
     import sys
     if "--so-montar" in sys.argv:
         print(montar())
         sys.exit(0)
     status = {"rodou_em_utc": dt.datetime.utcnow().isoformat(timespec="seconds"), "fontes": {}}
-    for nome, fn in [("futuros", futuros), ("continuo", continuo), ("ptax", ptax), ("cftc", cftc)]:
+    for nome, fn in [("futuros", futuros), ("continuo", continuo), ("ptax", ptax), ("cftc", cftc),
+                     ("b3", b3), ("cepea", cepea), ("faep", faep), ("agrural", agrural)]:
         try:
             n, falhas = fn()
             status["fontes"][nome] = {"linhas": n, "falhas": falhas}
@@ -180,6 +389,10 @@ if __name__ == "__main__":
         status["painel"] = montar()
     except Exception as e:
         status["painel"] = {"falha": str(e)}
+    try:
+        status["painel"]["boi_recente"] = montar_boi()
+    except Exception as e:
+        status["painel"]["boi_falha"] = str(e)
     os.makedirs(OUT, exist_ok=True)
     json.dump(status, open(os.path.join(OUT, "status.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print(json.dumps(status, ensure_ascii=False, indent=1))
