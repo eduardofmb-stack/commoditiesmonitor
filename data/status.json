@@ -1,5 +1,5 @@
 {
- "rodou_em_utc": "2026-11-26T19:14:34",
+ "rodou_em_utc": "2026-11-27T10:29:12",
  "fontes": {
   "futuros": {
    "linhas": 3765,
@@ -12,12 +12,18 @@
    "falhas": []
   },
   "ptax": {
-   "linhas": 2509,
+   "linhas": 2508,
    "falhas": []
   },
   "cftc": {
    "linhas": 780,
    "falhas": []
   }
+ },
+ "painel": {
+  "futuros_recente": 300,
+  "historico_futuros": 3765,
+  "historico_continuo": 5022,
+  "cftc": 780
  }
 }
