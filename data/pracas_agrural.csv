@@ -1,0 +1,78 @@
+data,produto,uf,praca,preco_rs_sc
+2026-11-27,Soja,PR,Paranaguá,165.5
+2026-11-27,Soja,PR,Ponta Grossa,160.0
+2026-11-27,Soja,PR,Guarapuava,158.0
+2026-11-27,Soja,PR,Maringá,157.0
+2026-11-27,Soja,PR,Cascavel,157.0
+2026-11-27,Soja,PR,Francisco Beltrão,158.0
+2026-11-27,Soja,SC,São Francisco do Sul,165.0
+2026-11-27,Soja,RS,Rio Grande,167.0
+2026-11-27,Soja,RS,Erechim,159.0
+2026-11-27,Soja,RS,Passo Fundo,159.0
+2026-11-27,Soja,MT,Rondonópolis,142.5
+2026-11-27,Soja,MT,Primavera do Leste,138.5
+2026-11-27,Soja,MT,Canarana,130.0
+2026-11-27,Soja,MT,Sorriso,135.0
+2026-11-27,Soja,MT,Lucas do Rio Verde,132.0
+2026-11-27,Soja,MT,Sinop,137.0
+2026-11-27,Soja,MT,Campo Novo do Parecis,134.0
+2026-11-27,Soja,MT,Sapezal,134.0
+2026-11-27,Soja,MS,Campo Grande,149.0
+2026-11-27,Soja,MS,Dourados,149.0
+2026-11-27,Soja,MS,São Gabriel do Oeste,148.0
+2026-11-27,Soja,MS,Chapadão do Sul,149.0
+2026-11-27,Soja,DF,Brasília,149.0
+2026-11-27,Soja,GO,Mineiros,149.0
+2026-11-27,Soja,GO,Rio Verde,150.0
+2026-11-27,Soja,GO,Jataí,149.0
+2026-11-27,Soja,SP,Santos,166.5
+2026-11-27,Soja,SP,Orlândia,156.5
+2026-11-27,Soja,SP,Ourinhos,156.5
+2026-11-27,Soja,MG,Uberlândia,145.0
+2026-11-27,Soja,MG,Uberaba,145.0
+2026-11-27,Soja,MG,Unaí,149.0
+2026-11-27,Soja,BA,Luís Eduardo Magalhães,147.0
+2026-11-27,Soja,MA,Balsas,147.0
+2026-11-27,Soja,MA,São Luís,163.0
+2026-11-27,Soja,TO,Palmas,142.0
+2026-11-27,Soja,PI,Uruçuí,141.0
+2026-11-27,Soja,PA,Barcarena,155.0
+2026-11-27,Milho,PR,Paranaguá,67.0
+2026-11-27,Milho,PR,Campo Mourão,57.0
+2026-11-27,Milho,PR,Cascavel,59.0
+2026-11-27,Milho,PR,Maringá,57.0
+2026-11-27,Milho,PR,Ponta Grossa,64.0
+2026-11-27,Milho,PR,Guarapuava,64.0
+2026-11-27,Milho,SP,Campinas (CIF),67.03
+2026-11-27,Milho,SP,Sorocabana,62.33
+2026-11-27,Milho,SP,Mogiana,57.94
+2026-11-27,Milho,MS,Campo Grande,52.5
+2026-11-27,Milho,MS,Dourados,52.5
+2026-11-27,Milho,MS,Chapadão do Sul,51.0
+2026-11-27,Milho,MS,Costa Rica,51.0
+2026-11-27,Milho,MT,Rondonópolis,46.0
+2026-11-27,Milho,MT,Campo Verde,45.0
+2026-11-27,Milho,MT,Tangará da Serra,45.0
+2026-11-27,Milho,MT,Sapezal,45.0
+2026-11-27,Milho,MT,Lucas do Rio Verde,42.0
+2026-11-27,Milho,MT,Sorriso,42.0
+2026-11-27,Milho,MT,Sinop,40.0
+2026-11-27,Milho,MT,Querência,45.0
+2026-11-27,Milho,GO,Itumbiara,54.0
+2026-11-27,Milho,GO,Rio Verde,54.0
+2026-11-27,Milho,MG,Uberaba,61.0
+2026-11-27,Milho,MG,Uberlândia,61.0
+2026-11-27,Milho,MG,Unaí,56.5
+2026-11-27,Milho,MG,Patos de Minas,61.0
+2026-11-27,Milho,SC,Chapecó,67.0
+2026-11-27,Milho,SC,Concórdia,68.0
+2026-11-27,Milho,SC,Campos Novos,67.0
+2026-11-27,Milho,SC,Canoinhas,67.0
+2026-11-27,Milho,RS,Erechim,67.0
+2026-11-27,Milho,RS,Passo Fundo,67.0
+2026-11-27,Milho,RS,Porto Alegre CIF,71.0
+2026-11-27,Milho,BA,Luís Eduardo Magalhães,61.5
+2026-11-27,Milho,MA,Balsas,65.0
+2026-11-27,Milho,DF,Brasília,56.5
+2026-11-27,Milho,TO,Palmas,49.0
+2026-11-27,Milho,PI,Uruçuí,58.0

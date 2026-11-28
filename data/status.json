@@ -1,5 +1,5 @@
 {
- "rodou_em_utc": "2026-11-27T10:29:12",
+ "rodou_em_utc": "2026-11-28T10:19:45",
  "fontes": {
   "futuros": {
    "linhas": 3765,
@@ -8,7 +8,7 @@
    ]
   },
   "continuo": {
-   "linhas": 7542,
+   "linhas": 7545,
    "falhas": []
   },
   "ptax": {
@@ -18,12 +18,31 @@
   "cftc": {
    "linhas": 780,
    "falhas": []
+  },
+  "b3": {
+   "linhas": 541,
+   "falhas": []
+  },
+  "cepea": {
+   "linhas": 0,
+   "falhas": [
+    "could not convert string to float: '¢ 436.43'"
+   ]
+  },
+  "faep": {
+   "linhas": 16,
+   "falhas": []
+  },
+  "agrural": {
+   "linhas": 77,
+   "falhas": []
   }
  },
  "painel": {
   "futuros_recente": 300,
   "historico_futuros": 3765,
-  "historico_continuo": 5022,
-  "cftc": 780
+  "historico_continuo": 5026,
+  "cftc": 780,
+  "boi_recente": 80
  }
 }
